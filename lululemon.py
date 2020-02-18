@@ -20,8 +20,8 @@ browser.maximize_window()
 
 def get_options():
     selector = Select(browser.find_element_by_class_name("js-select-series-date"))
-    option_vals = [x.get_attribute('value') for x in selector.options]
-    options_text = [x.text for x in selector.options]
+    option_vals = [x.get_attribute('value') for x in selector.options][1:]
+    options_text = [x.text for x in selector.options][1:]
     options = dict(zip(range(len(option_vals)), zip(option_vals, options_text)))
     return options, selector
 
@@ -47,7 +47,7 @@ def register(id, options):
     # browser.find_element_by_link_text("Registrierung abschließen").click()
 
 options, selector = get_options()
-id = 2
+id = 1
 register(id, options)
 
 
@@ -60,7 +60,7 @@ def monitor(options):
                 time.sleep(1)
             except KeyboardInterrupt:
                 continue
-        browser.refresh()
+        browser.get('sample_url')
 
         # fix so that only options with new value trigger
         new_options, selector = get_options()
