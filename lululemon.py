@@ -19,32 +19,16 @@ import email
 from email.message import EmailMessage
 
 
-def get_options(browser):
-    """
-
-    Args:
-        browser: Selenium webdriver, with the target website already loaded
-
-    Returns:
-        options: list of tuples, the first tuples contains all option values and the second option text
-
-    """
-    selector = Select(browser.find_element_by_class_name("js-select-series-date"))
-    option_ids = [x.get_attribute('value') for x in selector.options][1:]
-    options_text = [x.text.strip() for x in selector.options][1:]
-    return option_ids, options_text, selector
-
-
-def snooze(mins):
+def snooze(secs):
     """
     'Fancy' sleep function implemented in a way compatible with keyboard interrupt
     Args:
-        mins: int, minutes to sleep
+        secs: int, seconds to sleep
 
     Returns: Nothing
 
     """
-    for t in range(round(60 * mins)):
+    for t in range(round(secs)):
         try:
             time.sleep(1)
         except KeyboardInterrupt:
@@ -91,7 +75,32 @@ def get_last_email():
     return email_msg
 
 
-def monitor(options=[]):
+def get_options():
+    """
+
+    Args:
+        browser: Selenium webdriver, with the target website already loaded
+
+    Returns:
+        options: list of tuples, the first tuples contains all option values and the second option text
+
+    """
+    global selector
+    element = WebDriverWait(browser, 15).until(EC.presence_of_element_located((By.CLASS_NAME, 'js-select-series-date')))
+    selector = Select(element)
+    #selector = Select(browser.find_element_by_class_name("js-select-series-date"))
+    option_ids = [x.get_attribute('value') for x in selector.options][1:]
+    options_text = [x.text.strip() for x in selector.options][1:]
+    return option_ids, options_text
+
+
+def load_website():
+    browser.get(website)
+    sat_class = browser.find_elements_by_xpath("//*[contains(text(), 'Weekly Community Class on Saturday')]")
+    sat_class[0].click()
+
+
+def monitor():
     """
     Monitors list of options on website (from dropdown) and triggers when a new option is added
     Args:
@@ -103,33 +112,32 @@ def monitor(options=[]):
     """
     # launch browser
     print(f'{datetime.datetime.now()} - Launching web driver')
+    global browser, id, opt_text
     browser = webdriver.Chrome()
-    browser.get(website)
     browser.maximize_window()
+    load_website()
 
-    # initialize options if not given by user
-    if not options:
-        options = get_options(browser)
+    # don't initialize options if we want initial trigger, else do
+    options = ([None], [None]) if initial_trigger else get_options()
 
     while True:
         print(f'{datetime.datetime.now()} - Monitoring...')
-        new_options = get_options(browser)
-        selector = new_options[2]
+        new_options = get_options()
 
         # if a new option is found and it doesn't contain 'AUSVERKAUFT', alert is triggered
         for i, id in enumerate(new_options[0]):
             opt_text = new_options[1][i]
             if id not in options[0] and 'AUSVERKAUFT' not in opt_text:
                 print(f'{datetime.datetime.now()} - New valid option found')
-                send_alert(id, opt_text, browser, selector)
+                send_alert()
         options = new_options
 
         # sleep and then refresh website
-        snooze(1) # time in mins
-        browser.get(website)
+        snooze(monitor_freq * 3600)
+        load_website()
 
 
-def send_alert(id, opt_text, browser, selector):
+def send_alert():
     """
     Sends email alert with info about the new available event
     Args:
@@ -143,27 +151,25 @@ def send_alert(id, opt_text, browser, selector):
     email_msg = f'To the attention of all ***REMOVED*** ***REMOVED***,\n\nA new ***REMOVED*** Saturday Weekly Community Class is available. It reads:\n\n{opt_text}\n\nIf you want to automatically register, answer to this email changing the SUBJECT to "register".' + auto_msg
     send_email (email_msg)
     print(f'{datetime.datetime.now()} - Alert sent')
-    listen(id, opt_text, browser, selector)
+    listen()
 
 
-def listen(id, opt_text, browser, selector):
-    timeout = time.time() + listen_time * 3600
+def listen():
+    timeout = time.time() + listen_timeout * 3600
     print(f'{datetime.datetime.now()} - Listening...')
     while True:
-        snooze(0.1)  # time in mins
+        snooze(listen_freq)
         if time.time() > timeout:
             send_email('Time out for registration, you can try to register manually instead.' + auto_msg)
             print(f'{datetime.datetime.now()} - Listening timed out')
             break
 
         if get_last_email()['Subject'].lower() == 'register':
-            register(id, opt_text, browser, selector)
+            register()
             break
 
 
-
-
-def register(id, opt_text, browser, selector):
+def register():
     try:
         print(f'{datetime.datetime.now()} - Confirmation to register received, trying to register')
         selector.select_by_value(id)
@@ -190,9 +196,13 @@ def register(id, opt_text, browser, selector):
         send_email('An unexpected error occurred! This is likely because the class got full in the meanwhile. You can try to register manually instead.' + auto_msg)
 
 if __name__ == "__main__":
-    website = 'sample_url'
-    alert_receivers = ['sample_email@gmail.com', 'sample_email@outlook.com']
+    website = 'https://sample_url/o/***REMOVED***-zurich-10921153659'
     auto_msg = '\n\nThis is an automatically generated message.'
-    listen_time = 3 # time in hours
 
-    monitor(('123', 'test')) # sample argument options: ('123', 'test')
+    initial_trigger = True
+    alert_receivers = ['sample_email@gmail.com', 'sample_email@outlook.com']
+    listen_timeout = 3 # time in hours
+    monitor_freq = 0.5 # time in hours
+    listen_freq = 5 # time in seconds
+
+    monitor()
