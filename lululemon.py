@@ -39,8 +39,7 @@ def send_email(email_msg):
     """
     Sends email alert with info about the new available event
     Args:
-        val: string, value reference in website selector
-        text: string, text of event in selector
+        email_msg: string, body of the email to be sent
 
     Returns: Nothing
 
@@ -58,6 +57,11 @@ def send_email(email_msg):
 
 
 def get_last_email():
+    """
+    Gets last email from textbox
+    Returns: email.message, last email in inbox
+
+    """
     with imaplib.IMAP4_SSL('imap.gmail.com') as imap:
         imap.login('sample_email@gmail.com', 'sample_pw')
         imap.select("INBOX")  # imap.list() to see all folders
@@ -71,18 +75,28 @@ def get_last_email():
         raw_email = data[0][1].decode('utf-8')
         imap.close()
 
+        # TODO: Using code below a better implementation that considers id can be used to implement
+        # 'silence' as a filter-out list and also to have a better 'register' functionality. Subject search case insens.
+        # status, data = imap.uid('search', None, 'SUBJECT "silence"')
+        # for id in email_uids:
+        #     status, data = imap.uid('fetch', id, "(RFC822)")
+        #     raw_email = data[0][1].decode('utf-8')
+        #     email_msg = email.message_from_string(raw_email)
+        #     email_subject = email_msg['Subject']
+        #     print(email_subject)
+
+
     email_msg = email.message_from_string(raw_email)
     return email_msg
 
 
 def get_options():
     """
-
-    Args:
-        browser: Selenium webdriver, with the target website already loaded
+    Starting from target website already loaded, returns options in selector
 
     Returns:
-        options: list of tuples, the first tuples contains all option values and the second option text
+        option_ids: list of strings, contain ids for each event
+        option_text: list of strings, contain description for each event
 
     """
     global selector
@@ -95,6 +109,12 @@ def get_options():
 
 
 def load_website():
+    """
+    Navigates to options website from a generic parent website (which url doesn't change)
+
+    Returns: Nothing
+
+    """
     browser.get(website)
     sat_class = browser.find_elements_by_xpath("//*[contains(text(), 'Weekly Community Class on Saturday')]")
     sat_class[0].click()
@@ -103,9 +123,6 @@ def load_website():
 def monitor():
     """
     Monitors list of options on website (from dropdown) and triggers when a new option is added
-    Args:
-        options: set of initials options. A change from initial options will cause a trigger.
-                 By default it fetches them from the website, but they can be passed
 
     Returns: Nothing, but calls an alerting function that sends email to users
 
@@ -140,9 +157,6 @@ def monitor():
 def send_alert():
     """
     Sends email alert with info about the new available event
-    Args:
-        val: string, value reference in website selector
-        text: string, text of event in selector
 
     Returns: Nothing
 
@@ -155,6 +169,12 @@ def send_alert():
 
 
 def listen():
+    """
+    Monitors inbox in search for a register trigger
+
+    Returns: Nothing
+
+    """
     timeout = time.time() + listen_timeout * 3600
     print(f'{datetime.datetime.now()} - Listening...')
     while True:
@@ -170,6 +190,12 @@ def listen():
 
 
 def register():
+    """
+    Registers user for event
+
+    Returns: Nothing, but sends a confirmation email
+
+    """
     try:
         print(f'{datetime.datetime.now()} - Confirmation to register received, trying to register')
         selector.select_by_value(id)
