@@ -162,7 +162,7 @@ def send_alert():
 
     """
 
-    email_msg = f'To the attention of all ***REMOVED*** ***REMOVED***,\n\nA new ***REMOVED*** Saturday Weekly Community Class is available. It reads:\n\n{opt_text}\n\nIf you want to automatically register, answer to this email changing the SUBJECT to "register".' + auto_msg
+    email_msg = f'To my ***REMOVED*** ***REMOVED***,\n\nA new ***REMOVED*** Saturday Weekly Community Class is available. It reads:\n\n{opt_text}\n\nIf you want to automatically register, answer to this email changing the SUBJECT to "register".' + auto_msg
     send_email (email_msg)
     print(f'{datetime.datetime.now()} - Alert sent')
     listen()
@@ -226,7 +226,7 @@ if __name__ == "__main__":
     auto_msg = '\n\nThis is an automatically generated message.'
 
     initial_trigger = True
-    alert_receivers = ['sample_email@gmail.com', 'sample_email@outlook.com']
+    alert_receivers = ['sample_email@gmail.com', 'sample_email@gmail.com']
     listen_timeout = 3 # time in hours
     monitor_freq = 0.5 # time in hours
     listen_freq = 5 # time in seconds
