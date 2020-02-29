@@ -1,0 +1,573 @@
+(function($, _, EB) {
+    'use strict';
+
+    EB.namespace('AdvancedTeams');
+
+    EB.AdvancedTeams.TeamModel = EB.Backbone.Model.extend({
+
+        defaults: {
+            'name': '',
+            'public_event_id': null,
+            'password': null,
+            'errors': null
+        },
+
+        config: {
+            'eventsUrl': '/api/v3/events/',
+            'createTeamsUrl': '/teams/create/'
+        },
+
+        url: function() {
+            if (this.get('id')){
+                return '/teams/' + this.get('id') + '/update/team/';
+            } else {
+                return this.config.eventsUrl + this.get('public_event_id') + this.config.createTeamsUrl;
+            }
+        },
+
+        checkPassword: function(password) {
+            password = password || this.get('password');
+
+            return $.post('/teams/' + this.get('id') + '/check_password/', {
+                password: password
+            }, 'json');
+        }
+
+    });
+
+    define('eb/advanced_teams/team_model', [],function() {
+        return EB.AdvancedTeams.TeamModel;
+    });
+
+})(window.jQuery, window._, window.EB);
+
+(function() {
+    'use strict';
+
+    EB.namespace('AdvancedTeams');
+
+    EB.AdvancedTeams.TeamCollection = EB.Backbone.Collection.extend({
+
+        model: EB.AdvancedTeams.TeamModel,
+
+        initialize: function(models, options) {
+            if (typeof options !== 'object' || typeof options.eventID === 'undefined') {
+                throw 'AdvancedTeams.TeamSearchView requires an event_id';
+            }
+
+            this.eventID = options.eventID;
+            this.url = this.url();
+        },
+
+        url: function() {
+            return '/event/' + this.eventID + '/teams/search';
+        },
+
+        findByName: function(name) {
+            name = name.toLowerCase();
+
+            return this.find(function(team) {
+                return team.get('name').toLowerCase() === name;
+            });
+        }
+
+    });
+
+    define('eb/advanced_teams/team_collection', [
+        'eb/advanced_teams/team_model'
+    ], function() {
+        return EB.AdvancedTeams.TeamCollection;
+    });
+
+})();
+
+define('eb/advanced_teams/constants',{
+    TeamSearchView: {
+        FIELD_ERROR_SELECTOR: '.js-team-password-error',
+        SEARCH_INPUT_CLASS: '.js-team-search-input',
+        TEAM_SELECTED_EVENT: 'select',
+        AUTOCOMPLETE_DELAY: 200
+    }
+});
+
+define('eb/components/teams/search/team_search_view',['require','jquery','backbone','eb-styleguide/js/ui_components/autocomplete/autocomplete_view','eb/advanced_teams/constants','eb/advanced_teams/team_model','eb/advanced_teams/team_collection','jquery_autocomplete'],function(require) {
+    'use strict';
+
+    var $ = require('jquery'),
+        Backbone = require('backbone'),
+
+        Autocomplete = require('eb-styleguide/js/ui_components/autocomplete/autocomplete_view'),
+        TeamsConstants = require('eb/advanced_teams/constants'),
+        TeamModel = require('eb/advanced_teams/team_model'),
+        TeamCollection = require('eb/advanced_teams/team_collection'),
+
+        configHelpTextNames = {
+            teamSearchInput: '.js-team-search-input',
+            visibleClass: 'has-form-input-error',
+            hiddenClass: 'is-hidden',
+            siblings: '.form__field-error'
+        };
+
+    require('jquery_autocomplete');
+
+    return Backbone.View.extend({
+
+        events: {
+            'click .js-change-team': 'handleChangeTeamClick',
+            'click .js-team-password-button': 'handleTeamPasswordCheckClick',
+            'keyup .js-team-password-input': 'handlePasswordKeyup',
+            'keydown .js-team-password-input': 'handlePasswordKeydown',
+            'submit .js-team-search-form': 'handleFormSubmit'
+        },
+
+        initialize: function(options) {
+            var self = this;
+
+            if (typeof options !== 'object' ||
+                    !(options.collection instanceof TeamCollection)) {
+                throw 'AdvancedTeams.TeamSearchView requires an AdvancedTeams.TeamCollection';
+            }
+
+            _.bindAll(
+                this,
+                'assignTeam',
+                'handlePasswordKeyup',
+                'findTeams',
+                'selectTeam',
+                '_checkPasswordResponse'
+            );
+
+            $(function() {
+                self.render();
+                self.$teamPasswordInput = self.$('.js-team-password-input');
+                self.initializeAutocomplete();
+            });
+
+            if (options.teamID){
+                this.collection.fetch({
+                    data: $.param({
+                        team_id: options.teamID
+                    })
+                }).done(function(response){
+                    if (response.length > 0) {
+                        self.selectTeam(undefined, {
+                            item: response[0]
+                        });
+                    } else {
+                        self.$('.js-team-not-found').removeClass('is-hidden');
+                    }
+                });
+            }
+
+        },
+
+        initializeAutocomplete: function() {
+            new Autocomplete({
+                el: this.$(TeamsConstants.TeamSearchView.SEARCH_INPUT_CLASS),
+                minLength: 2,
+                select: this.selectTeam,
+                source: this.findTeams,
+                delay: TeamsConstants.TeamSearchView.AUTOCOMPLETE_DELAY
+            });
+        },
+
+
+        findTeams: function(request, response) {
+            var term = request.term;
+            this.$('.js-team-not-found').addClass('is-hidden');
+            this.$('.js-team-search-input')
+                    .removeClass('has-form-input-error')
+                    .parent()
+                    .siblings('.form__field-error')
+                    .addClass('is-hidden');
+
+            this.teamFetchDeferred = this.collection.fetch({
+                data: $.param({
+                    term: term
+                })
+            }).done(this._parseTeams(term, response));
+        },
+
+        selectTeam: function(event, ui) {
+            var selectedTeam = ui.item;
+
+            this.currentlySelectedTeam = new TeamModel(selectedTeam);
+            this.$(TeamsConstants.TeamSearchView.SEARCH_INPUT_CLASS).autocomplete('close');
+
+            if (this.options.eventID === this.options.actualEventId) {
+                this.options['isSameSelectedTeam'] = selectedTeam.is_team_member;
+            }
+
+            if (selectedTeam['is_full']) {
+                this._showHelpText(Handlebars.helpers.getTerminology('Bummer! This team is full. Please join a different team.'));
+                return;
+            }
+
+            if (selectedTeam['has_password']) {
+                this.authorizationDfd = $.Deferred();
+                this._showPasswordRequiredInput(selectedTeam);
+                this.authorizationDfd.done(this.assignTeam);
+            } else {
+                this.assignTeam();
+            }
+        },
+
+        assignTeam: function() {
+            this.trigger(TeamsConstants.TeamSearchView.TEAM_SELECTED_EVENT, this.currentlySelectedTeam);
+        },
+
+        render: function() {
+            this.$el.html(this.options.template());
+
+            return this;
+        },
+
+        handleFormSubmit: function(e) {
+            var self = this,
+                term = this.$('.js-team-search-input').val();
+            e.preventDefault();
+
+            if (term.length < 1) {
+                return;
+            } else if (typeof this.teamFetchDeferred === 'undefined') {
+                this.findTeams({term: term}, function(){});
+            }
+
+            window.setTimeout(function() {
+                self.teamFetchDeferred.done(function(response) {
+                    if (response.length > 0) {
+                        self.selectTeam(undefined, {
+                            item: response[0]
+                        });
+                    } else {
+                        self.$('.js-team-not-found').removeClass('is-hidden');
+                    }
+                });
+            }, TeamsConstants.TeamSearchView.AUTOCOMPLETE_DELAY);
+        },
+
+        handleChangeTeamClick: function(e) {
+            e.preventDefault();
+            this.$('.js-team-search-input').val('');
+            this.$('.js-team-search-row').removeClass('is-hidden');
+            this.$('.js-team-info').addClass('is-hidden');
+            this.$('.js-team-password-row').addClass('is-hidden');
+        },
+
+        handleTeamPasswordCheckClick: function(e) {
+            e.preventDefault();
+            this._submitPassword();
+        },
+
+        handlePasswordKeydown: function(e) {
+            // this is done to prevent default behavior when enter key is pressed
+            // whic causes repeated ajax calls to check_password on keydown
+            if (e.which === 13) {
+                e.preventDefault();
+            }
+        },
+
+        handlePasswordKeyup: function(e) {
+            e.preventDefault();
+
+            if (e.which === 13) {
+                this._submitPassword();
+            }
+        },
+
+        _showPasswordRequiredInput: function(team) {
+            var changeTeamText = Handlebars.helpers.getTerminology('Looks like this team requires a password to join, or <a href="#" class="js-change-team">find another team.</a>');
+
+            this.$('.js-team-search-row').addClass('is-hidden');
+
+            this.$('.js-team-info').html(this.options.teamInfoTemplate({
+                teamName: team.name,
+                teamLogo: team.logo,
+                changeTeamPrompt: changeTeamText
+            })).removeClass('is-hidden');
+
+            this.$('.js-team-password-row').removeClass('is-hidden');
+        },
+
+        _submitPassword: function() {
+            var password = this.$teamPasswordInput.val(),
+                passwordCheckPromise = this.currentlySelectedTeam.checkPassword(
+                    password
+                );
+
+            passwordCheckPromise.done(this._checkPasswordResponse);
+        },
+
+        _checkPasswordResponse: function(response) {
+            if (response.token) {
+                this.currentlySelectedTeam.set('token', response.token);
+                this.authorizationDfd.resolve();
+            } else {
+                this.$teamPasswordInput.addClass('has-form-input-error')
+                        .siblings(TeamsConstants.TeamSearchView.FIELD_ERROR_SELECTOR)
+                        .removeClass('is-hidden');
+                $('.js-team-password-error').addClass('form__field-error');
+
+                this.$teamPasswordInput.one('click keyup', function() {
+                    $(this).removeClass('has-form-input-error')
+                            .siblings(TeamsConstants.TeamSearchView.FIELD_ERROR_SELECTOR)
+                            .addClass('is-hidden');
+                    $('.js-team-password-error').removeClass('form__field-error');
+                });
+            }
+        },
+
+        _parseTeams: function(term, response) {
+            var self = this;
+
+            // pass response in and wait for data to be passed in later
+            return function(teamsResponse) {
+                var teams = _(teamsResponse).map(function(team) {
+                    var label = team.name;
+
+                    if (team['is_full']) {
+                        label = interpolate(gettext('%(team_name)s (Full)'), {'team_name': label}, true);
+                    }
+
+                    team.label = label;
+                    team.value = team.name;
+                    return team;
+                });
+
+                response(teams);
+            };
+        },
+
+        _showHelpText: function(text) {
+            this.$(configHelpTextNames.teamSearchInput)
+                    .addClass(configHelpTextNames.visibleClass)
+                    .parent()
+                    .siblings(configHelpTextNames.siblings)
+                    .removeClass(configHelpTextNames.hiddenClass)
+                    .html(text);
+        }
+
+    });
+});
+
+this["Handlebars"] = this["Handlebars"] || {};
+this["Handlebars"]["templates"] = this["Handlebars"]["templates"] || {};
+
+this["Handlebars"]["templates"]["team_search"] = Handlebars.template(function (Handlebars,depth0,helpers,partials,data) {
+  this.compilerInfo = [4,'>= 1.0.0'];
+helpers = this.merge(helpers, Handlebars.helpers); data = data || {};
+  var buffer = "", stack1, options, helperMissing=helpers.helperMissing, escapeExpression=this.escapeExpression;
+
+
+  buffer += "<form class=\"js-team-search-form form form--tall form--labels-medium l-align-center\">\n    <div class=\"js-team-search-row form__row\">\n        <span class=\"autocomplete-component l-align-left\">\n            <input type=\"text\" data-automation=\"team-search-input\" id=\"js-team-search-input\" class=\"js-team-search-input form__input--long\" placeholder=\"";
+  options = {hash:{},data:data};
+  buffer += escapeExpression(((stack1 = helpers.getTerminology || (depth0 && depth0.getTerminology)),stack1 ? stack1.call(depth0, "Search for a team", options) : helperMissing.call(depth0, "getTerminology", "Search for a team", options)))
+    + "\" />\n        </span>\n        <input type=\"submit\" class=\"btn\" value=\"";
+  options = {hash:{},data:data};
+  buffer += escapeExpression(((stack1 = helpers['_'] || (depth0 && depth0['_'])),stack1 ? stack1.call(depth0, "Join", options) : helperMissing.call(depth0, "_", "Join", options)))
+    + "\">\n        <div class=\"is-hidden form__field-error\"></div>\n    </div>\n\n    <div class=\"js-team-not-found is-hidden l-mar-top-3 pod pod--alert form__row\">\n        <div class=\"l-pad-vert-3 l-pad-hor-2 has-centered-inline-content\">\n            <p class=\"text-heading-secondary\">";
+  options = {hash:{},data:data};
+  buffer += escapeExpression(((stack1 = helpers.getTerminology || (depth0 && depth0.getTerminology)),stack1 ? stack1.call(depth0, "Whoops! We couldn't find the team name you entered.", options) : helperMissing.call(depth0, "getTerminology", "Whoops! We couldn't find the team name you entered.", options)))
+    + "</p>\n            <p>";
+  options = {hash:{},data:data};
+  buffer += escapeExpression(((stack1 = helpers.getTerminology || (depth0 && depth0.getTerminology)),stack1 ? stack1.call(depth0, "Check the spelling of your team name and try again.", options) : helperMissing.call(depth0, "getTerminology", "Check the spelling of your team name and try again.", options)))
+    + "</p>\n        </div>\n    </div>\n\n    <div class=\"js-team-info is-hidden l-mar-top-3 form__row\"></div>\n\n    <div class=\"js-team-password-row is-hidden l-mar-top-3 form__row form__row--label-column has-centered-inline-content\">\n        <label class=\"form__label--column\">";
+  options = {hash:{},data:data};
+  buffer += escapeExpression(((stack1 = helpers.getTerminology || (depth0 && depth0.getTerminology)),stack1 ? stack1.call(depth0, "Enter Team Password", options) : helperMissing.call(depth0, "getTerminology", "Enter Team Password", options)))
+    + "</label>\n        <input type=\"password\" class=\"js-team-password-input form__input--medium\" />\n        <button class=\"js-team-password-button btn\">";
+  options = {hash:{},data:data};
+  buffer += escapeExpression(((stack1 = helpers['_'] || (depth0 && depth0['_'])),stack1 ? stack1.call(depth0, "Join", options) : helperMissing.call(depth0, "_", "Join", options)))
+    + "</button>\n        <aside class=\"js-team-password-error is-hidden\">";
+  options = {hash:{},data:data};
+  buffer += escapeExpression(((stack1 = helpers['_'] || (depth0 && depth0['_'])),stack1 ? stack1.call(depth0, "Sorry, that password is incorrect.", options) : helperMissing.call(depth0, "_", "Sorry, that password is incorrect.", options)))
+    + "</aside>\n    </div>\n</form>\n";
+  return buffer;
+  });
+
+this["Handlebars"]["templates"]["team_info"] = Handlebars.template(function (Handlebars,depth0,helpers,partials,data) {
+  this.compilerInfo = [4,'>= 1.0.0'];
+helpers = this.merge(helpers, Handlebars.helpers); data = data || {};
+  var buffer = "", stack1, functionType="function", escapeExpression=this.escapeExpression, helperMissing=helpers.helperMissing, self=this;
+
+function program1(depth0,data) {
+  
+  var buffer = "", stack1;
+  buffer += "\n                <div class=\"image-container image-container--square image--small\">\n                    <img src=\"";
+  if (stack1 = helpers.teamLogo) { stack1 = stack1.call(depth0, {hash:{},data:data}); }
+  else { stack1 = (depth0 && depth0.teamLogo); stack1 = typeof stack1 === functionType ? stack1.call(depth0, {hash:{},data:data}) : stack1; }
+  buffer += escapeExpression(stack1)
+    + "\" />\n                </div>\n    ";
+  return buffer;
+  }
+
+function program3(depth0,data) {
+  
+  
+  return "\n                <i class=\"ico-box ico--color-subtle ico-team-created ico--medium\"></i>\n    ";
+  }
+
+function program5(depth0,data) {
+  
+  var buffer = "", stack1, options;
+  buffer += "\n            <div>\n                <span class=\"text-heading-primary\">";
+  if (stack1 = helpers.teamName) { stack1 = stack1.call(depth0, {hash:{},data:data}); }
+  else { stack1 = (depth0 && depth0.teamName); stack1 = typeof stack1 === functionType ? stack1.call(depth0, {hash:{},data:data}) : stack1; }
+  buffer += escapeExpression(stack1)
+    + "</span>\n                <div class=\"text-body-small\">";
+  options = {hash:{},data:data};
+  buffer += escapeExpression(((stack1 = helpers.markSafe || (depth0 && depth0.markSafe)),stack1 ? stack1.call(depth0, (depth0 && depth0.changeTeamPrompt), options) : helperMissing.call(depth0, "markSafe", (depth0 && depth0.changeTeamPrompt), options)))
+    + "</div>\n            </div>\n    ";
+  return buffer;
+  }
+
+  buffer += "<div class=\"pod pod--primary\">\n    <div class=\"l-pad-vert-5 l-sm-pad-vert-3 l-pad-hor-4 l-sm-pad-hor-2 layout-padded--list-item l-media-v-center\">\n        <div class=\"l-media-v-center__row\">\n            <div>\n    ";
+  stack1 = helpers['if'].call(depth0, (depth0 && depth0.teamLogo), {hash:{},inverse:self.program(3, program3, data),fn:self.program(1, program1, data),data:data});
+  if(stack1 || stack1 === 0) { buffer += stack1; }
+  buffer += "\n            </div>\n    ";
+  stack1 = helpers['if'].call(depth0, (depth0 && depth0.teamName), {hash:{},inverse:self.noop,fn:self.program(5, program5, data),data:data});
+  if(stack1 || stack1 === 0) { buffer += stack1; }
+  buffer += "\n        </div>\n    </div>\n</div>\n";
+  return buffer;
+  });
+define("templates/build/team_search", function(){});
+
+this["Handlebars"] = this["Handlebars"] || {};
+this["Handlebars"]["templates"] = this["Handlebars"]["templates"] || {};
+
+this["Handlebars"]["templates"]["mobile_team_search"] = Handlebars.template(function (Handlebars,depth0,helpers,partials,data) {
+  this.compilerInfo = [4,'>= 1.0.0'];
+helpers = this.merge(helpers, Handlebars.helpers); data = data || {};
+  var buffer = "", stack1, options, helperMissing=helpers.helperMissing, escapeExpression=this.escapeExpression;
+
+
+  buffer += "<header class=\"pod__header js-team-info\">\n    <h2 class=\"text-heading-primary has-centered-inline-content\">\n        ";
+  options = {hash:{},data:data};
+  buffer += escapeExpression(((stack1 = helpers.getTerminology || (depth0 && depth0.getTerminology)),stack1 ? stack1.call(depth0, "Join a Team", options) : helperMissing.call(depth0, "getTerminology", "Join a Team", options)))
+    + "\n    </h2>\n</header>\n\n<form class=\"form form--stacked form--tall js-team-search-form\">\n\n    <div class=\"js-team-search-row form__row layout-padded--mobile\">\n        <label class=\"form__row\" for=\"team-search-input\" >\n            <span class=\"text-body--medium text-body--understated\">\n                ";
+  options = {hash:{},data:data};
+  buffer += escapeExpression(((stack1 = helpers.getTerminology || (depth0 && depth0.getTerminology)),stack1 ? stack1.call(depth0, "Find Your Team", options) : helperMissing.call(depth0, "getTerminology", "Find Your Team", options)))
+    + "\n            </span>\n        </label>\n        <div class=\"form__row form__row--mobile l-media-flexible\">\n            <div class=\"l-media-flexible__fluid\">\n                <input type=\"text\" class=\"js-team-search-input l-media-flexible__fluid__object\" placeholder=\"";
+  options = {hash:{},data:data};
+  buffer += escapeExpression(((stack1 = helpers.getTerminology || (depth0 && depth0.getTerminology)),stack1 ? stack1.call(depth0, "Team Name", options) : helperMissing.call(depth0, "getTerminology", "Team Name", options)))
+    + "\" id=\"team-search-input\" />\n                <div class=\"is-hidden form__field-error\"></div>\n            </div>\n            <div class=\"l-media-flexible__fixed has-centered-inline-content\">\n                <input type=\"submit\" class=\"btn\" value=\"";
+  options = {hash:{},data:data};
+  buffer += escapeExpression(((stack1 = helpers.getTerminology || (depth0 && depth0.getTerminology)),stack1 ? stack1.call(depth0, "Join", options) : helperMissing.call(depth0, "getTerminology", "Join", options)))
+    + "\">\n            </div>\n        </div>\n    </div>\n\n    <div class=\"js-team-not-found is-hidden l-mar-top-3 l-pad-vert-5 l-sm-pad-vert-3 l-pad-hor-4 l-sm-pad-hor-2 pod pod--alert form__row\">\n        <div class=\"l-pad-vert-3 l-pad-hor-2 has-centered-inline-content\">\n            <p class=\"text-heading-secondary\">";
+  options = {hash:{},data:data};
+  buffer += escapeExpression(((stack1 = helpers.getTerminology || (depth0 && depth0.getTerminology)),stack1 ? stack1.call(depth0, "Whoops! We couldn't find the team name you entered.", options) : helperMissing.call(depth0, "getTerminology", "Whoops! We couldn't find the team name you entered.", options)))
+    + "</p>\n            <p>";
+  options = {hash:{},data:data};
+  buffer += escapeExpression(((stack1 = helpers.getTerminology || (depth0 && depth0.getTerminology)),stack1 ? stack1.call(depth0, "Check the spelling of your team name and try again.", options) : helperMissing.call(depth0, "getTerminology", "Check the spelling of your team name and try again.", options)))
+    + "</p>\n        </div>\n    </div>\n\n    <div class=\"layout-padded--mobile  js-team-password-row is-hidden\">\n        <div class=\"form__row\">\n            <label class=\"text-default text-body--faint\" for=\"team-password\">";
+  options = {hash:{},data:data};
+  buffer += escapeExpression(((stack1 = helpers.getTerminology || (depth0 && depth0.getTerminology)),stack1 ? stack1.call(depth0, "Enter Team Password", options) : helperMissing.call(depth0, "getTerminology", "Enter Team Password", options)))
+    + ":</label>\n        </div>\n        <div class=\"l-mar-top-3 form__row\">\n            <input type=\"password\" class=\"js-team-password-input form__input--full-width\" id=\"team-password\" />\n            <aside class=\"form__field-error is-hidden\">";
+  options = {hash:{},data:data};
+  buffer += escapeExpression(((stack1 = helpers.getTerminology || (depth0 && depth0.getTerminology)),stack1 ? stack1.call(depth0, "Sorry, that password is incorrect.", options) : helperMissing.call(depth0, "getTerminology", "Sorry, that password is incorrect.", options)))
+    + "</aside>\n        </div>\n        <div class=\"l-mar-top-3 form__row\">\n            <a class=\"js-team-password-button btn btn--block\">";
+  options = {hash:{},data:data};
+  buffer += escapeExpression(((stack1 = helpers.getTerminology || (depth0 && depth0.getTerminology)),stack1 ? stack1.call(depth0, "Join", options) : helperMissing.call(depth0, "getTerminology", "Join", options)))
+    + "</a>\n        </div>\n    </div>\n\n</form>\n";
+  return buffer;
+  });
+
+this["Handlebars"]["templates"]["mobile_team_info"] = Handlebars.template(function (Handlebars,depth0,helpers,partials,data) {
+  this.compilerInfo = [4,'>= 1.0.0'];
+helpers = this.merge(helpers, Handlebars.helpers); data = data || {};
+  var buffer = "", stack1, helperMissing=helpers.helperMissing, escapeExpression=this.escapeExpression, self=this;
+
+function program1(depth0,data) {
+  
+  var buffer = "", stack1, options;
+  buffer += "\n        ";
+  options = {hash:{},data:data};
+  buffer += escapeExpression(((stack1 = helpers.getTerminology || (depth0 && depth0.getTerminology)),stack1 ? stack1.call(depth0, "Join Team %s", (depth0 && depth0.teamName), options) : helperMissing.call(depth0, "getTerminology", "Join Team %s", (depth0 && depth0.teamName), options)))
+    + "\n    ";
+  return buffer;
+  }
+
+function program3(depth0,data) {
+  
+  var buffer = "", stack1, options;
+  buffer += "\n        ";
+  options = {hash:{},data:data};
+  buffer += escapeExpression(((stack1 = helpers.getTerminology || (depth0 && depth0.getTerminology)),stack1 ? stack1.call(depth0, "Join a Team", options) : helperMissing.call(depth0, "getTerminology", "Join a Team", options)))
+    + "\n    ";
+  return buffer;
+  }
+
+  buffer += "<h2 class=\"text-heading-primary has-centered-inline-content\">\n    ";
+  stack1 = helpers['if'].call(depth0, (depth0 && depth0.teamName), {hash:{},inverse:self.program(3, program3, data),fn:self.program(1, program1, data),data:data});
+  if(stack1 || stack1 === 0) { buffer += stack1; }
+  buffer += "\n</h2>\n";
+  return buffer;
+  });
+define("templates/build/mobile_team_search", function(){});
+
+/** This is a helper function to resolve team-based terminology
+ *  for old listings group registration 
+ *  (e.g. "Create a Team" -> "Create an Association" for Association events).
+ *  We need this as vars cannot be directly translated by the gettext scraper.
+ *  
+ *  @param {string} text The terminology to resolve
+ *  @return {string} The resolved and translated terminology
+ */
+
+(function(preprocessor, gettext, Handlebars) {
+    'use strict';
+
+    Handlebars.registerHelper('getTerminology', function(text) {
+        var resolvedTerm = gettext(text);
+
+        if (window.preprocessor) {
+            if (window.preprocessor[text]) {
+                resolvedTerm = gettext(window.preprocessor[text]);
+            }
+        }
+
+        return resolvedTerm;
+    });
+
+})(window.preprocessor, window.gettext, window.Handlebars);
+
+define("eb/advanced_teams/terminology/eb_terminology_helper", function(){});
+
+define('eb/components/teams/search/app',[
+    'eb/advanced_teams/team_model',
+    'eb/advanced_teams/team_collection',
+    'eb/components/teams/search/team_search_view',
+    'templates/build/team_search',
+    'templates/build/mobile_team_search',
+    'eb/advanced_teams/terminology/eb_terminology_helper'
+], function(TeamModel, TeamCollection, TeamSearchView) {
+    'use strict';
+
+    // You must also include a version of jquery ui autocomplete
+    var teamSearchViewFactory;
+
+    teamSearchViewFactory = {
+        create: function(options) {
+            var collection = new TeamCollection([], {
+                eventID: options.eventID,
+                model: TeamModel
+            });
+
+            options.collection = options.collection || collection;
+
+            return new TeamSearchView(options);
+        },
+        desktop: function(options) {
+            options.template = Handlebars.templates['team_search'];
+            options.teamInfoTemplate = Handlebars.templates['team_info'];
+            return teamSearchViewFactory.create(options);
+        },
+        mobile: function(options) {
+            options.template = Handlebars.templates['mobile_team_search'];
+            options.teamInfoTemplate = Handlebars.templates['mobile_team_info'];
+            return teamSearchViewFactory.create(options);
+        }
+    };
+
+    return teamSearchViewFactory;
+});
+

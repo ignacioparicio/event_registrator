@@ -1,0 +1,24 @@
+website: https://www.sample.com
+enable_registration: True
+frequencies:
+  listen_timeout: 3 # time, in hours, until listening times out
+  monitor_freq: 0.5 # interval between monitoring, in hours
+  listen_freq: 5 # interval between listenings, in seconds
+
+email:
+  subject: New yoga class available
+  sender: senderemail@gmail.com
+  password: mypw
+  alert_receivers:
+    - senderemail@gmail.com
+    - receiveremail@gmail.com
+  auto_msg_flag: '\n\nThis is an automatically generated message.'
+  body_register_intro: 'Dear Receiver,\n\nA new class is available.'
+  body_register_how_to: 'If you want to automatically register, answer to this email changing the SUBJECT to "register".'
+  body_timeout: 'Time out for registration, you can try to register manually instead.'
+  body_error: 'An unexpected error occurred! This is likely because the class got full in the meanwhile. You can try to register manually instead.'
+
+registree:
+  first_name: John
+  last_name: Smith
+  email_address: receiveremail@gmail.com
