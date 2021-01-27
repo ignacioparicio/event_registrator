@@ -605,7 +605,7 @@ var data = {
     },{
       "function":"__mqp",
       "vtp_url":["macro",115],
-      "vtp_targetUrl":"https:\/\/sample_url\/blog\/asset\/event-trends-report",
+      "vtp_targetUrl":"https:\/\/www.eventbrite.co.uk\/blog\/asset\/event-trends-report",
       "vtp_params":["list"]
     },{
       "function":"__mqp",
@@ -2047,7 +2047,7 @@ var data = {
     },{
       "function":"_cn",
       "arg0":["macro",3],
-      "arg1":"https:\/\/sample_url\/blog\/academy\/2020-event-trends-report"
+      "arg1":"https:\/\/www.eventbrite.co.uk\/blog\/academy\/2020-event-trends-report"
     },{
       "function":"_eq",
       "arg0":["macro",84],

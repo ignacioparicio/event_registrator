@@ -1640,19 +1640,19 @@ var data = {
     },{
       "function":"_cn",
       "arg0":["macro",9],
-      "arg1":"https:\/\/sample_url\/l\/music\/"
+      "arg1":"https:\/\/www.eventbrite.co.uk\/l\/music\/"
     },{
       "function":"_cn",
       "arg0":["macro",9],
-      "arg1":"https:\/\/sample_url\/l\/consumer-shows\/"
+      "arg1":"https:\/\/www.eventbrite.co.uk\/l\/consumer-shows\/"
     },{
       "function":"_cn",
       "arg0":["macro",9],
-      "arg1":"https:\/\/sample_url\/l\/food-drink-event-ticketing\/"
+      "arg1":"https:\/\/www.eventbrite.co.uk\/l\/food-drink-event-ticketing\/"
     },{
       "function":"_cn",
       "arg0":["macro",9],
-      "arg1":"https:\/\/sample_url\/l\/charities\/"
+      "arg1":"https:\/\/www.eventbrite.co.uk\/l\/charities\/"
     },{
       "function":"_cn",
       "arg0":["macro",9],
@@ -1660,51 +1660,51 @@ var data = {
     },{
       "function":"_cn",
       "arg0":["macro",9],
-      "arg1":"https:\/\/sample_url\/l\/conferences\/"
+      "arg1":"https:\/\/www.eventbrite.co.uk\/l\/conferences\/"
     },{
       "function":"_cn",
       "arg0":["macro",9],
-      "arg1":"https:\/\/sample_url\/l\/sell-tickets\/"
+      "arg1":"https:\/\/www.eventbrite.co.uk\/l\/sell-tickets\/"
     },{
       "function":"_cn",
       "arg0":["macro",9],
-      "arg1":"https:\/\/sample_url\/l\/event-management-software\/"
+      "arg1":"https:\/\/www.eventbrite.co.uk\/l\/event-management-software\/"
     },{
       "function":"_cn",
       "arg0":["macro",9],
-      "arg1":"https:\/\/sample_url\/l\/registration-online\/"
+      "arg1":"https:\/\/www.eventbrite.co.uk\/l\/registration-online\/"
     },{
       "function":"_cn",
       "arg0":["macro",9],
-      "arg1":"https:\/\/sample_url\/l\/own-your-event\/"
+      "arg1":"https:\/\/www.eventbrite.co.uk\/l\/own-your-event\/"
     },{
       "function":"_cn",
       "arg0":["macro",9],
-      "arg1":"https:\/\/sample_url\/organizer\/overview\/"
+      "arg1":"https:\/\/www.eventbrite.co.uk\/organizer\/overview\/"
     },{
       "function":"_cn",
       "arg0":["macro",9],
-      "arg1":"https:\/\/sample_url\/organizer\/pricing\/"
+      "arg1":"https:\/\/www.eventbrite.co.uk\/organizer\/pricing\/"
     },{
       "function":"_cn",
       "arg0":["macro",9],
-      "arg1":"https:\/\/sample_url\/contact-sales\/"
+      "arg1":"https:\/\/www.eventbrite.co.uk\/contact-sales\/"
     },{
       "function":"_cn",
       "arg0":["macro",9],
-      "arg1":"https:\/\/sample_url\/organizer\/compare-packages\/"
+      "arg1":"https:\/\/www.eventbrite.co.uk\/organizer\/compare-packages\/"
     },{
       "function":"_cn",
       "arg0":["macro",9],
-      "arg1":"https:\/\/sample_url\/organizer\/essentials"
+      "arg1":"https:\/\/www.eventbrite.co.uk\/organizer\/essentials"
     },{
       "function":"_cn",
       "arg0":["macro",9],
-      "arg1":"https:\/\/sample_url\/organizer\/professional"
+      "arg1":"https:\/\/www.eventbrite.co.uk\/organizer\/professional"
     },{
       "function":"_cn",
       "arg0":["macro",9],
-      "arg1":"https:\/\/sample_url\/organizer\/premium"
+      "arg1":"https:\/\/www.eventbrite.co.uk\/organizer\/premium"
     },{
       "function":"_cn",
       "arg0":["macro",9],
@@ -1740,7 +1740,7 @@ var data = {
     },{
       "function":"_eq",
       "arg0":["macro",16],
-      "arg1":"sample_url"
+      "arg1":"www.eventbrite.co.uk"
     },{
       "function":"_sw",
       "arg0":["macro",11],
